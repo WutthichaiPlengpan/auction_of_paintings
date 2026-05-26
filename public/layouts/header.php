@@ -50,9 +50,14 @@
                 <nav class="hidden md:flex space-x-8">
                     <a href="/auction_of_paintings/public/index"
                         class="text-gray-900 font-medium hover:text-primary transition">หน้าแรก</a>
-                    <a href="/auction_of_paintings/public/my_bids" class="text-gray-500 hover:text-primary transition">กำลังประมูล</a>
+                    <a href="/auction_of_paintings/public/my_bids"
+                        class="text-gray-500 hover:text-primary transition">กำลังประมูล</a>
                     <a href="/auction_of_paintings/public/artists"
                         class="text-gray-500 hover:text-primary transition">ศิลปิน</a>
+                    <a href="/auction_of_paintings/public/about_us"
+                        class="text-gray-500 hover:text-primary transition">เกี่ยวกับเรา</a>
+                    <a href="/auction_of_paintings/public/contact"
+                        class="text-gray-500 hover:text-primary transition">ติดต่อเรา</a>
                 </nav>
 
                 <!-- พื้นที่สำหรับแสดงปุ่ม Login หรือ Profile -->
