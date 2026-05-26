@@ -1,0 +1,13 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    
+    # กำหนด Base URL ของ API
+    RewriteBase /api/
+    
+    # ถ้าสิ่งที่ Request มาเป็นไฟล์หรือโฟลเดอร์ที่มีอยู่จริง (เช่น รูปภาพ) ให้โหลดไฟล์นั้นเลย
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    
+    # ถ้าไม่มีไฟล์นั้น ให้ส่ง URL ทั้งหมดไปให้ index.php จัดการ
+    RewriteRule ^(.*)$ index.php?route=$1 [QSA,L]
+</IfModule>

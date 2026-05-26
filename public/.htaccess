@@ -1,0 +1,21 @@
+<IfModule mod_rewrite.c>
+    Options -MultiViews
+    RewriteEngine On
+
+    # ระบุ Base Path สำหรับโฟลเดอร์ public
+    RewriteBase /auction_of_paintings/public/
+
+    # ถ้าไฟล์หรือโฟลเดอร์มีอยู่จริง ให้โหลดได้ตามปกติ (เช่น รูปภาพ, CSS, JS)
+    RewriteCond %{REQUEST_FILENAME} -d [OR]
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # ลบส่วนขยาย .php ออกจาก URL
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^(.*)$ $1.php [L]
+
+    # ป้องกันการพิมพ์ .php ตรงๆ บน URL ให้เด้งกลับไปแบบไม่มี .php
+    RewriteCond %{THE_REQUEST} \s/+(.+?)\.php[\s?] [NC]
+    RewriteRule ^ /auction_of_paintings/public/%1 [R=301,L,NE]
+</IfModule>
+
