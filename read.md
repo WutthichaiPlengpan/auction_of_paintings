@@ -72,3 +72,184 @@ Dashboard การขาย:
 ดูรายได้ของแพลตฟอร์ม (จากเปอร์เซ็นต์ที่หักไว้)
 
 สถิติการใช้งานต่างๆ
+
+🌊 1. System Flowchart (กระบวนการทำงานหลัก)
+ระบบของเราแบ่ง Journey ออกเป็น 3 เส้นทางหลัก ดังนี้ครับ:
+
+Flow 1: การสมัครสมาชิกและการเป็นผู้ขาย (User & KYC Flow)
+User สมัครสมาชิก (ได้สิทธิ์เป็น Buyer โดยปริยาย)
+
+Buyer ต้องการขายผลงาน -> ไปที่หน้าตั้งค่า กรอกฟอร์ม e-KYC (ชื่อ, บัตร ปชช, บัญชี, อัปโหลดรูป)
+
+ระบบนำเลขบัตร ปชช. ไปเช็คกับตาราง Blacklist
+
+ถ้าติด Blacklist: ปฏิเสธทันที
+
+ถ้าผ่าน: เข้ารหัสข้อมูลด้วย AES-256-CBC และบันทึกสถานะเป็น pending
+
+Admin เข้ามารีวิวเอกสาร
+
+ถ้าปฏิเสธ: แจ้งเหตุผล, ลบรูปทิ้ง, กลับไปให้ User แก้ไข
+
+ถ้าอนุมัติ: เปลี่ยน Role User เป็น Seller (สามารถลงประมูลได้)
+
+Flow 2: การตั้งประมูลและการสู้ราคา (Auction Flow)
+Seller ลงผลงาน กำหนดราคาเริ่มต้น, ขั้นต่ำการบิด, และเวลาสิ้นสุด -> สินค้าสถานะ active
+
+Buyers เข้ามาดูผลงาน และกดสู้ราคา (ระบบใช้ Ajax Polling ดึงราคาแบบ Real-time)
+
+ระบบเช็คเงื่อนไข (ราคาต้องมากกว่าขั้นต่ำ, บล็อกไม่ให้ Seller บิดงานตัวเอง) -> อัปเดตราคาล่าสุด
+
+Cron Job (ระบบอัตโนมัติ) วิ่งเช็คทุกนาที
+
+ถ้าหมดเวลาและมีคนบิด: เปลี่ยนสถานะเป็น sold, บันทึก winner_id, และสร้างบิลในตาราง transactions
+
+ถ้าหมดเวลาแต่ไม่มีคนบิด: เปลี่ยนสถานะเป็น ended (จบแบบไม่มีคนซื้อ)
+
+Flow 3: ระบบการเงินคนกลางและการจัดส่ง (Escrow & Shipping Flow) 🌟 Core Feature
+Buyer (Winner) เห็นบิล -> โอนเงินเข้าบัญชีเว็บ (Admin) -> อัปโหลดสลิป -> สถานะ: paid_to_admin
+
+Admin ตรวจสอบสลิป -> กดยืนยัน -> สถานะ: admin_verified
+
+Seller เห็นว่าเงินเข้าเว็บแล้ว -> ทำการส่งของ -> กรอกเลข Tracking & รูปกล่องพัสดุ -> สถานะ: shipped
+
+Buyer ได้รับผลงานศิลปะ -> ตรวจสอบของ -> กดยืนยันรับสินค้า -> สถานะ: received
+
+Admin เห็นผู้ซื้อรับของแล้ว -> โอนเงินสุทธิ (หัก 17%) ให้ Seller -> อัปโหลดสลิป -> สถานะ: transferred_to_seller (จบกระบวนการ)
+
+🗄️ 2. ER Diagram (Entity-Relationship)
+นี่คือโครงสร้างตารางฐานข้อมูลและความสัมพันธ์ (Relationships) ที่ขับเคลื่อนระบบของเราครับ:
+
+users (ตารางหลัก)
+
+เก็บ id, username, password_hash, role (admin, buyer, seller), address (ที่อยู่จัดส่ง), status (active, banned)
+
+Relationship: 1-to-1 กับ kyc_verifications, 1-to-Many กับ products, bids, transactions
+
+kyc_verifications (ตารางยืนยันตัวตน)
+
+เก็บ user_id (FK), ชื่อจริง, บัตร ปชช. (เข้ารหัส), บัญชีธนาคาร (เข้ารหัส), สถานะ KYC
+
+products (ตารางสินค้า)
+
+เก็บ seller_id (FK), winner_id (FK), ชื่อผลงาน, ราคาปัจจุบัน, เวลาจบ, สถานะ (active, sold, ended)
+
+bids (ตารางประวัติการเสนอราคา)
+
+เก็บ product_id (FK), user_id (FK), ราคาที่บิด, เวลาที่บิด
+
+transactions (ตารางธุรกรรม / Escrow)
+
+เก็บ product_id, buyer_id, seller_id (FK ทั้งหมด)
+
+เก็บยอดเงิน (final_price, commission_amount, seller_net_amount)
+
+เก็บการจัดส่ง (shipping_address, tracking_number, shipping_status)
+
+เก็บหลักฐาน (payment_slip, admin_transfer_slip, payment_status)
+
+banned_id_cards (ตารางแบล็กลิสต์)
+
+เก็บ id_card_encrypted (PK), เหตุผลที่โดนแบน
+
+🚥 3. State Machine (วงจรชีวิตของข้อมูล)
+เพื่อไม่ให้สับสนเวลาเขียนเงื่อนไข (If-Else) เราต้องกำหนด "สถานะ" ของ 2 ตัวแปรหลักให้ชัดเจนครับ:
+
+Product Status (สถานะผลงาน):
+active (กำลังประมูล) -> sold (ขายออก) หรือ ended (ขายไม่ออก)
+
+Transaction Payment Status (สถานะการจ่ายเงิน):
+pending (รอคนชนะโอน) -> paid_to_admin (ส่งสลิปแล้วรอตรวจ) -> admin_verified (เว็บได้รับเงินแล้ว) -> transferred_to_seller (จ่ายผู้ขายแล้ว / ปิดจ็อบ)
+
+Transaction Shipping Status (สถานะการจัดส่ง):
+pending (ยังไม่ส่ง) -> shipped (ผู้ขายส่งแล้ว) -> received (ผู้ซื้อยืนยันรับของแล้ว)
+
+ข้อมูลเหล่านี้เพียงพอสำหรับการนำไปคุยกับทีม นำเสนอผู้บริหาร หรือเขียนเป็น Document ระดับโปรเฟสชันนัลได้
+
+
+
+📝 สรุปโครงสร้างและระบบทั้งหมดของ ArtBids (Handoff Document)
+1. ภาพรวมโปรเจกต์ (Project Overview)
+แพลตฟอร์มประมูลภาพวาดออนไลน์ที่มีจุดเด่นด้าน "ความปลอดภัยและการป้องกันมิจฉาชีพ" โดยใช้ระบบยืนยันตัวตน (e-KYC) สำหรับผู้ขาย และระบบคนกลางถือเงิน (Escrow System) เพื่อให้มั่นใจว่าผู้ซื้อได้รับของ และผู้ขายได้รับเงินจริง (หักค่าคอมมิชชั่น 17%)
+
+2. Tech Stack ที่ใช้งาน
+
+Backend: PHP (Native), PDO (MySQL)
+
+Frontend: HTML, JavaScript (Vanilla), TailwindCSS (ผ่าน CDN/Build), SweetAlert2 (สำหรับแจ้งเตือน)
+
+Authentication: JWT (Firebase JWT Library)
+
+Security/Encryption: AES-256-CBC (สำหรับข้อมูล KYC)
+
+3. โมดูลและฟีเจอร์หลักที่พัฒนาเสร็จแล้ว
+
+Authentication & Profile:
+
+ระบบ Login/Register สร้าง JWT Token
+
+การตั้งค่า Profile (อัปเดตชื่อผู้ใช้งาน, รูป Avatar, และ "ที่อยู่จัดส่ง" สำหรับตอนประมูลชนะ)
+
+e-KYC (Identity Verification):
+
+ผู้ขายต้องอัปโหลดรูปบัตร ปชช. และเซลฟี่คู่บัตร
+
+ข้อมูลเลขบัตร ปชช. และเลขบัญชีธนาคาร จะถูกเข้ารหัสด้วย AES-256-CBC ก่อนลง Database
+
+มีระบบเช็ค Blacklist เลขบัตร ปชช. อัตโนมัติ
+
+Admin มีหน้า Dashboard สำหรับกด อนุมัติ/ปฏิเสธ เอกสาร
+
+Auction System (ระบบประมูล):
+
+Seller สามารถสร้างการประมูลได้ (กำหนดเวลาเริ่ม-จบ, ราคาขั้นต่ำ)
+
+Buyer สามารถกด Bidding ได้ (มี Logic ตรวจสอบราคาขั้นต่ำ และ บล็อกไม่ให้ Seller บิดงานของตัวเอง)
+
+หน้า My Bids (ประวัติการประมูลของฉัน): แยกแท็บ 'กำลังประมูล' และ 'ประวัติที่ผ่านมา'
+
+Escrow & Finance System (หัวใจหลักของระบบ): วงจรการซื้อขาย 5 ขั้นตอน
+
+Pending: ประมูลจบ ผู้ซื้อ (Buyer) เข้าหน้า My Wins เพื่อดูยอดและโอนเงินเข้าส่วนกลาง
+
+Paid_to_Admin: ผู้ซื้ออัปโหลดสลิป (ระบบดึงที่อยู่จัดส่งมาบันทึกลงบิลทันที)
+
+Admin_Verified: แอดมินตรวจสลิปว่าเงินเข้าเว็บจริง -> อนุมัติให้ผู้ขายเตรียมส่งของ
+
+Shipped: ผู้ขายเข้า Seller Dashboard -> ดูที่อยู่ผู้ซื้อ -> ส่งของแล้วกรอกเลข Tracking + รูปกล่อง
+
+Received & Transferred: ผู้ซื้อกดยืนยันรับของ -> แอดมินโอนเงินสุทธิ (หัก 17%) ให้ผู้ขายพร้อมแนบสลิปโอนเงิน
+
+🛡️ ข้อควรระวังเรื่องความปลอดภัย (Security Best Practices)
+ก่อนนำไปพัฒนาต่อ หรือเอาขึ้น Production (Server จริง) ให้เน้นย้ำกับ AI ตัวใหม่ถึงเรื่องเหล่านี้ครับ:
+
+การจัดการกุญแจเข้ารหัส (Encryption Keys & JWT Secret):
+
+ห้าม Hardcode ค่า $secret_key (สำหรับ JWT) และ $key_string, $iv_string (สำหรับ AES-256-CBC) ไว้ในไฟล์ PHP ตรงๆ
+
+ต้องย้าย ค่าเหล่านี้ไปไว้ในไฟล์ Environment (.env) และตั้งค่าไม่ให้ .env ถูกเข้าถึงได้ผ่าน Browser เด็ดขาด (มิฉะนั้นถ้า Key หลุด ข้อมูลบัตร ปชช. และบัญชีผู้ใช้จะถูกถอดรหัสได้หมด)
+
+File Upload Security:
+
+ตอนนี้เราตรวจแค่ Extension (นามสกุลไฟล์) jpg, jpeg, png
+
+สิ่งที่ต้องทำเพิ่ม: ตรวจสอบ MIME Type อย่างละเอียด และป้องกันการปลอมแปลงไฟล์ (เช่น เอาไฟล์ .php มาเปลี่ยนชื่อเป็น .jpg)
+
+สำคัญมาก: โฟลเดอร์ public/uploads/* ต้องตั้งค่าปิดการรันสคริปต์ (เช่น ปิด php_flag engine off ใน .htaccess ของโฟลเดอร์รูป) เพื่อป้องกันการโจมตีแบบ Remote Code Execution (RCE)
+
+SQL Injection:
+
+ตอนนี้ระบบใช้ PDO Prepared Statements (? และ execute()) ซึ่งปลอดภัยในระดับที่ดีมากแล้ว ต้องรักษามาตรฐานนี้ไว้ ห้ามนำตัวแปรไปต่อ String ใน SQL ตรงๆ เด็ดขาด
+
+XSS (Cross-Site Scripting):
+
+ทุกครั้งที่มีการดึงข้อมูลที่ผู้ใช้พิมพ์ (เช่น ชื่อ, ที่อยู่จัดส่ง) มาโชว์บนหน้า HTML หรือใส่ใน JavaScript (เช่น onclick="") ต้องมีการทำความสะอาด (Sanitize) หรือ Escape อักขระพิเศษ (เช่น htmlspecialchars() ใน PHP หรือ replace() ใน JS) อย่างที่เราเคยเจอบั๊กตัวแปรที่อยู่ขึ้นบรรทัดใหม่ทำให้ JS พัง
+
+CORS & API Protection:
+
+ตรวจสอบ Origin ให้แน่ชัด และจำกัด Rate Limit ของ API โดยเฉพาะ API การประมูล (v1/auctions/bid) เพื่อป้องกันการยิง Request รัวๆ สแปมระบบ (DDoS/Spam)
+
+💡 Prompt (คำสั่ง) แนะนำสำหรับเริ่มต้นแชทกับ AI ตัวใหม่:
+
+"ฉันกำลังพัฒนาแพลตฟอร์มประมูลงานศิลปะออนไลน์ชื่อ ArtBids ด้วย PHP (PDO), JavaScript (Vanilla) และ TailwindCSS โดยมีระบบหลักคือ e-KYC (เข้ารหัส AES-256-CBC) และระบบการเงินแบบ Escrow (ผู้ซื้อโอนเข้าส่วนกลาง -> ส่งของ -> รับของ -> โอนให้ผู้ขายหักคอมมิชชั่น 17%) มี Role คือ Admin, Seller, Buyer ระบบใช้ JWT ในการยืนยันตัวตนผ่าน API (fetch) ฉันต้องการให้คุณทำหน้าที่เป็น Senior Full-Stack Developer เพื่อช่วยฉันพัฒนาฟีเจอร์ต่อไป โดยเน้นเรื่อง Security (ป้องกัน SQLi, XSS, File Upload bypass) และเขียนโค้ดให้สอดคล้องกับโครงสร้างเดิม"
+

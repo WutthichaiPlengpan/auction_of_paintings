@@ -1,5 +1,6 @@
 <IfModule mod_rewrite.c>
-    Options -MultiViews
+    # ปิด Index และ MultiViews
+    Options -Indexes -MultiViews
     RewriteEngine On
 
     # ระบุ Base Path สำหรับโฟลเดอร์ public
@@ -18,4 +19,3 @@
     RewriteCond %{THE_REQUEST} \s/+(.+?)\.php[\s?] [NC]
     RewriteRule ^ /auction_of_paintings/public/%1 [R=301,L,NE]
 </IfModule>
-

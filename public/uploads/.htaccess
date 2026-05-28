@@ -1,0 +1,18 @@
+
+# 1. ปิดการประมวลผล PHP (สำหรับ Mod_PHP)
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+
+# 2. ปิดการประมวลผลสคริปต์อื่นๆ ทุกชนิด (ป้องกันขั้นสุด)
+<FilesMatch "\.(php|php\.|php3|php4|php5|php7|php8|phtml|pl|py|jsp|asp|htm|shtml|sh|cgi)$">
+    Require all denied
+</FilesMatch>
+
+# 3. บังคับให้ไฟล์ที่ยอมให้อ่านได้มีแค่รูปภาพเท่านั้น (ถ้ามีไฟล์แปลกปลอมหลุดมา จะเข้าดูไม่ได้)
+<FilesMatch "\.(?i:jpg|jpeg|png|gif|webp)$">
+    Require all granted
+</FilesMatch>
+
+# 4. ปิดการแสดงผล Directory
+Options -Indexes
